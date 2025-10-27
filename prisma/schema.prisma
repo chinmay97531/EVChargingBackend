@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int          @id @default(autoincrement())
+  username    String       
+  email       String       @unique
+  password    String
+  role        Role         @default(USER)
+  status      Boolean      @default(true)
+  remarks     String?
+  carDetails  Car[]
+  bookings    Booking[]
+  payments    Payment[]
+}
+
+enum Role {
+  USER
+  ADMIN
+  STAFF
+}
+
+model Car {
+  id                    Int   @id @default(autoincrement())
+  userId                Int
+  user                  User           @relation(fields: [userId], references: [id])
+  name                  String
+  model                 String
+  number                String
+  currentBatteryHealth  Float
+  capacityOfBattery     Float
+  currentBatteryStatus  Float
+  typeOfPort            String
+  fastSupporting        Boolean
+  status          Boolean      @default(true)
+  remarks         String?
+}
+
+model ChargingStation {
+  id              Int          @id @default(autoincrement())
+  name            String
+  capacity        Int
+  solarCapacity   Float
+  avaliableSlots  Int
+  status          Boolean      @default(true)
+  remarks         String?
+
+  energyUsage      EnergyUsage[]
+  solarUsage       SolarUsage[]
+  bookings    Booking[]
+}
+
+model Booking{
+  id            Int            @id @default(autoincrement())
+  userId        Int
+  user          User           @relation(fields: [userId], references: [id])
+  chargingStationId Int
+  chargingStation   ChargingStation @relation(fields: [chargingStationId], references: [id])
+  startTime     DateTime
+  endTime       DateTime
+  slotNumber    Int
+  typeOfCharging  ChargingType  @default(DYNAMIC)
+  isOccupied    DateTime
+  status        BookingStatus  @default(PENDING)
+  remarks       String?
+  payment       Payment?
+}
+
+enum ChargingType {
+  SLOW
+  FAST
+  DYNAMIC
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Payment {
+  id        Int     @id @default(autoincrement())
+  bookingId Int     @unique
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id])
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  amount    Float
+  paymentMode PaymnetType @default(CASH)
+  status    PaymentStatus @default(PENDING)
+  remarks   String?
+  createdAt DateTime @default(now())
+}
+
+enum PaymnetType {
+  CREDIT_CARD
+  DEBIT_CARD
+  UPI
+  NET_BANKING
+  WALLET
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model EnergyUsage {
+  id                 Int      @id @default(autoincrement())
+  chargingStationId  Int
+  chargingStation    ChargingStation @relation(fields: [chargingStationId], references: [id])
+  update5Min         DateTime @default(now())
+  gridElectricityUsed Float
+  fastChargingPrice   Float
+  slowChargingPrice   Float
+  status              Boolean @default(true)
+  remarks             String?
+}
+
+model SolarUsage {
+  id                 Int      @id @default(autoincrement())
+  chargingStationId  Int
+  chargingStation    ChargingStation @relation(fields: [chargingStationId], references: [id])
+  update5Min         DateTime @default(now())
+  currentSolarPower  Float
+  fastChargingPrice  Float
+  slowChargingPrice  Float
+  solarChargingPrice Float
+  status              Boolean @default(true)
+  remarks             String?
+}
