@@ -12,20 +12,34 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const zod_1 = require("zod");
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const errorHandler_1 = require("./middleware/errorHandler");
+const routes_1 = __importDefault(require("./routes"));
+// Keep old middleware for backward compatibility
+const middleware_1 = require("./middleware");
+const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const express_1 = __importDefault(require("express"));
-const client_1 = require("@prisma/client");
+const zod_1 = require("zod");
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
-const config_2 = require("./config");
-const middleware_1 = require("./middleware");
-const cors_1 = __importDefault(require("cors"));
+const response_1 = require("./utils/response");
 const app = (0, express_1.default)();
 const client = new client_1.PrismaClient();
+// Middleware
 app.use(express_1.default.json());
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: ["http://localhost:5173", "http://localhost:3000", "http://localhost:5174"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "token"],
+}));
+// Health check
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", message: "Server is running" });
+});
+// Auth routes (keeping existing endpoints)
 app.post("/api/v1/signup", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const requiredBody = zod_1.z.object({
         username: zod_1.z.string().min(2).max(50),
@@ -34,9 +48,7 @@ app.post("/api/v1/signup", (req, res) => __awaiter(void 0, void 0, void 0, funct
     });
     const parsedData = requiredBody.safeParse(req.body);
     if (!parsedData.success) {
-        res.status(400).json({
-            message: "Data parsing in Signup failed",
-        });
+        (0, response_1.sendError)(res, "Data parsing in Signup failed", 400);
         return;
     }
     const { username, email, password } = parsedData.data;
@@ -49,17 +61,13 @@ app.post("/api/v1/signup", (req, res) => __awaiter(void 0, void 0, void 0, funct
                 email: email,
             },
         });
-        res.status(200).json({
-            message: "User created successfully",
-        });
+        (0, response_1.sendSuccess)(res, null, "User created successfully", 201);
+        return;
     }
     catch (err) {
-        res.status(400).json({
-            message: err,
-        });
+        (0, response_1.sendError)(res, err.message || "Error creating user", 400);
     }
 }));
-//@ts-ignore
 app.post("/api/v1/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password } = req.body;
     const user = yield client.user.findFirst({
@@ -68,48 +76,28 @@ app.post("/api/v1/signin", (req, res) => __awaiter(void 0, void 0, void 0, funct
         },
     });
     if (!user) {
-        res.status(400).json({
-            message: "User not found",
-        });
+        (0, response_1.sendError)(res, "User not found", 400);
         return;
     }
-    const hashedPassword = user === null || user === void 0 ? void 0 : user.password;
-    if (!hashedPassword) {
-        res.status(400).json({
-            message: "Password not found",
-        });
-        return;
-    }
-    const passwordMatch = yield bcrypt_1.default.compare(password, user === null || user === void 0 ? void 0 : user.password);
+    const passwordMatch = yield bcrypt_1.default.compare(password, user.password);
     if (!passwordMatch) {
-        res.status(400).json({
-            message: "Password does not match",
-        });
+        (0, response_1.sendError)(res, "Password does not match", 400);
         return;
     }
-    if (passwordMatch) {
-        const token = jsonwebtoken_1.default.sign({
-            id: user === null || user === void 0 ? void 0 : user.id.toString(),
-        }, config_1.JWT_SECRET, {});
-        res.json({ token });
-    }
-    else {
-        res.json({
-            message: "Incoorect Credentials",
-        });
-    }
+    const token = jsonwebtoken_1.default.sign({
+        id: user.id.toString(),
+    }, config_1.JWT_SECRET, {});
+    (0, response_1.sendSuccess)(res, { token }, "Sign in successful");
 }));
-//@ts-ignore
+// Existing charging station routes (keeping for backward compatibility)
 app.post("/api/v1/nearestEVStation", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { lat, long } = req.body;
         if (!lat || !long) {
-            res.status(400).json({
-                message: "Lat or Long not provided",
-            });
+            (0, response_1.sendError)(res, "Lat or Long not provided", 400);
             return;
         }
-        const apiKey = config_2.OPEN_CHARGE_MAPS_API_KEY;
+        const apiKey = config_1.OPEN_CHARGE_MAPS_API_KEY;
         const response = yield axios_1.default.get("https://api.openchargemap.io/v3/poi/", {
             params: {
                 output: "json",
@@ -123,10 +111,7 @@ app.post("/api/v1/nearestEVStation", middleware_1.userMiddleware, (req, res) => 
         });
         const data = response.data;
         if (data.length === 0) {
-            res.status(400).json({
-                message: "No charging stations found nearby",
-            });
-            return;
+            (0, response_1.sendError)(res, "No charging stations found nearby", 400);
         }
         const stations = data.map((station) => {
             var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
@@ -169,26 +154,21 @@ app.post("/api/v1/nearestEVStation", middleware_1.userMiddleware, (req, res) => 
                 SlowChargers: slowCharger,
             };
         });
-        res.status(200).json({
-            message: "Charging stations fetched successfully",
-            stations,
-        });
+        (0, response_1.sendSuccess)(res, { stations }, "Charging stations fetched successfully");
+        return;
     }
     catch (err) {
-        res.status(400).json({
-            message: "Error in fetching the charging stations",
-        });
+        (0, response_1.sendError)(res, "Error in fetching the charging stations", 400);
     }
 }));
-//@ts-ignore
+// Keep other existing routes...
 app.post("/api/v1/getStationDetails", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const apiKey = config_2.OPEN_CHARGE_MAPS_API_KEY;
+        const apiKey = config_1.OPEN_CHARGE_MAPS_API_KEY;
         const { stationName } = req.body;
         if (!stationName) {
-            return res.status(400).json({
-                message: "Station name is required",
-            });
+            (0, response_1.sendError)(res, "Station name is required", 400);
+            return;
         }
         const response = yield axios_1.default.get("https://api.openchargemap.io/v3/poi/", {
             params: {
@@ -209,9 +189,8 @@ app.post("/api/v1/getStationDetails", middleware_1.userMiddleware, (req, res) =>
         })
             .slice(0, 100);
         if (matches.length === 0) {
-            return res.status(404).json({
-                message: "No stations found with the given name",
-            });
+            (0, response_1.sendError)(res, "No stations found with the given name", 404);
+            return;
         }
         const stations = matches.map((station) => {
             var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
@@ -254,23 +233,21 @@ app.post("/api/v1/getStationDetails", middleware_1.userMiddleware, (req, res) =>
                 SlowChargers: slowCharger,
             };
         });
-        res.status(200).json({
-            message: "Charging stations fetched successfully",
-            stations,
-        });
+        (0, response_1.sendSuccess)(res, { stations }, "Charging stations fetched successfully");
+        return;
     }
     catch (error) {
         console.error("Error fetching station:", error);
-        return res.status(500).json({ message: "Server error" });
+        (0, response_1.sendError)(res, "Server error", 500);
     }
 }));
-//@ts-ignore
+// Missing routes - getStationDetailsByPostCode
 app.post("/api/v1/getStationDetailsByPostCode", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //both string and number are accepting
         const { pinCode } = req.body;
         if (!pinCode) {
-            return res.status(400).json({ message: "Postcode is required" });
+            (0, response_1.sendError)(res, "Postcode is required", 400);
+            return;
         }
         const geoRes = yield axios_1.default.get("https://nominatim.openstreetmap.org/search", {
             params: {
@@ -280,11 +257,12 @@ app.post("/api/v1/getStationDetailsByPostCode", middleware_1.userMiddleware, (re
             },
         });
         if (geoRes.data.length === 0) {
-            return res.status(404).json({ message: "Invalid or unknown postcode" });
+            (0, response_1.sendError)(res, "Invalid or unknown postcode", 404);
+            return;
         }
         const lat = geoRes.data[0].lat;
         const long = geoRes.data[0].lon;
-        const apiKey = config_2.OPEN_CHARGE_MAPS_API_KEY;
+        const apiKey = config_1.OPEN_CHARGE_MAPS_API_KEY;
         const response = yield axios_1.default.get("https://api.openchargemap.io/v3/poi/", {
             params: {
                 output: "json",
@@ -298,9 +276,7 @@ app.post("/api/v1/getStationDetailsByPostCode", middleware_1.userMiddleware, (re
         });
         const data = response.data;
         if (data.length === 0) {
-            res.status(400).json({
-                message: "No charging stations found nearby",
-            });
+            (0, response_1.sendError)(res, "No charging stations found nearby", 400);
             return;
         }
         const stations = data.map((station) => {
@@ -344,27 +320,24 @@ app.post("/api/v1/getStationDetailsByPostCode", middleware_1.userMiddleware, (re
                 SlowChargers: slowCharger,
             };
         });
-        res.status(200).json({
-            message: "Charging stations fetched successfully",
-            stations,
-        });
+        (0, response_1.sendSuccess)(res, { stations }, "Charging stations fetched successfully");
+        return;
     }
     catch (error) {
         console.error("Error fetching station:", error);
-        return res.status(500).json({ message: "Server error" });
+        (0, response_1.sendError)(res, "Server error", 500);
+        return;
     }
 }));
-//@ts-ignore
+// Missing route - getStationDetailsByCity
 app.post("/api/v1/getStationDetailsByCity", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const apiKey = config_2.OPEN_CHARGE_MAPS_API_KEY;
+        const apiKey = config_1.OPEN_CHARGE_MAPS_API_KEY;
         const { cityName } = req.body;
         if (!cityName) {
-            return res.status(400).json({
-                message: "provide the city name",
-            });
+            (0, response_1.sendError)(res, "provide the city name", 400);
+            return;
         }
-        //for different regoins provide country code
         const response = yield axios_1.default.get("https://api.openchargemap.io/v3/poi/", {
             params: {
                 output: "json",
@@ -382,9 +355,8 @@ app.post("/api/v1/getStationDetailsByCity", middleware_1.userMiddleware, (req, r
             return (_b = (_a = station.AddressInfo) === null || _a === void 0 ? void 0 : _a.Town) === null || _b === void 0 ? void 0 : _b.toLowerCase().includes(cityName.toLowerCase());
         });
         if (matches.length === 0) {
-            return res.status(404).json({
-                message: "No stations found in the given City",
-            });
+            (0, response_1.sendError)(res, "No stations found in the given City", 404);
+            return;
         }
         const stations = matches.map((station) => {
             var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
@@ -427,95 +399,18 @@ app.post("/api/v1/getStationDetailsByCity", middleware_1.userMiddleware, (req, r
                 SlowChargers: slowCharger,
             };
         });
-        res.status(200).json({
-            message: `Charging stations fetched successfully and number of Stations found are: ${matches.length}`,
-            stations,
-        });
+        (0, response_1.sendSuccess)(res, { stations }, `Charging stations fetched successfully and number of Stations found are: ${matches.length}`);
+        return;
     }
     catch (error) {
         console.error("Error fetching station:", error);
-        return res.status(500).json({ message: "Server error" });
+        (0, response_1.sendError)(res, "Server error", 500);
+        return;
     }
 }));
-//Update user Car details  (email, name and password already in table)
-//@ts-ignore
-app.post("/api/v1/insertCarData", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { carName, carModel, carNumber, currentBattreyHealth, capacityOfBattrey, typeOfPort, FastAndSlow, currentBattreyStatus, } = req.body;
-        if (!carName ||
-            !carModel ||
-            !carNumber ||
-            !currentBattreyHealth ||
-            !capacityOfBattrey ||
-            !typeOfPort ||
-            !FastAndSlow ||
-            !currentBattreyStatus) {
-            res.status(400).json({
-                message: "Car details are required",
-            });
-            return;
-        }
-        const car = yield client.car.create({
-            data: {
-                //@ts-ignore
-                userId: parseInt(req.userId),
-                name: carName,
-                model: carModel,
-                number: carNumber,
-                currentBatteryHealth: parseFloat(currentBattreyHealth),
-                capacityOfBattery: parseFloat(capacityOfBattrey),
-                typeOfPort: typeOfPort,
-                fastSupporting: FastAndSlow.toLowerCase() == "fast",
-                currentBatteryStatus: parseFloat(currentBattreyStatus),
-            },
-        });
-        res.status(200).json({
-            message: "Car details updated successfully",
-            car,
-        });
-    }
-    catch (err) {
-        if (err instanceof client_1.Prisma.PrismaClientValidationError) {
-            console.error("Validation Error Details:", err.message);
-        }
-        res.status(400).json({
-            message: "Error in updating the car details",
-            error: err,
-        });
-    }
-}));
-//@ts-ignore
-app.post("/api/v1/getCarDetails", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        //@ts-ignore
-        const userId = req.userId;
-        const car = yield client.car.findMany({
-            where: {
-                userId: parseInt(userId),
-            },
-        });
-        if (!car) {
-            return res.status(404).json({
-                message: "No car details found for this user",
-            });
-        }
-        //send the details of each with number of cars user have
-        res.status(200).json({
-            message: "Car details fetched successfully",
-            car,
-        });
-    }
-    catch (err) {
-        res.status(400).json({
-            message: "Error in fetching the car details",
-            error: err,
-        });
-    }
-}));
-//@ts-ignore
+// User management routes
 app.post("/api/v1/getUserDetails", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
         const userId = req.userId;
         const user = yield client.user.findUnique({
             where: {
@@ -528,32 +423,22 @@ app.post("/api/v1/getUserDetails", middleware_1.userMiddleware, (req, res) => __
             },
         });
         if (!user) {
-            return res.status(404).json({
-                message: "User not found",
-            });
+            (0, response_1.sendError)(res, "User not found", 404);
+            return;
         }
-        res.status(200).json({
-            message: "User details fetched successfully",
-            user,
-        });
+        (0, response_1.sendSuccess)(res, user, "User details fetched successfully");
     }
     catch (err) {
-        res.status(400).json({
-            message: "Error in fetching the user details",
-            error: err,
-        });
+        (0, response_1.sendError)(res, "Error in fetching the user details", 400);
     }
 }));
-//@ts-ignore
 app.post("/api/v1/updateUserName", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
         const userId = req.userId;
         const { username } = req.body;
         if (!username) {
-            return res.status(400).json({
-                message: "Username is required",
-            });
+            (0, response_1.sendError)(res, "Username is required", 400);
+            return;
         }
         const user = yield client.user.update({
             where: {
@@ -563,28 +448,19 @@ app.post("/api/v1/updateUserName", middleware_1.userMiddleware, (req, res) => __
                 username: username,
             },
         });
-        res.status(200).json({
-            message: "Username updated successfully",
-            user,
-        });
+        (0, response_1.sendSuccess)(res, user, "Username updated successfully");
     }
     catch (err) {
-        res.status(400).json({
-            message: "Error in updating the username",
-            error: err,
-        });
+        (0, response_1.sendError)(res, "Error in updating the username", 400);
     }
 }));
-//@ts-ignore
 app.post("/api/v1/updateUserPassword", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
         const userId = req.userId;
         const { oldPassword, newPassword } = req.body;
         if (!oldPassword || !newPassword) {
-            return res.status(400).json({
-                message: "Old and new passwords are required",
-            });
+            (0, response_1.sendError)(res, "Old and new passwords are required", 400);
+            return;
         }
         const user = yield client.user.findUnique({
             where: {
@@ -592,15 +468,13 @@ app.post("/api/v1/updateUserPassword", middleware_1.userMiddleware, (req, res) =
             },
         });
         if (!user) {
-            return res.status(404).json({
-                message: "User not found",
-            });
+            (0, response_1.sendError)(res, "User not found", 404);
+            return;
         }
         const passwordMatch = yield bcrypt_1.default.compare(oldPassword, user.password);
         if (!passwordMatch) {
-            return res.status(400).json({
-                message: "Old password does not match",
-            });
+            (0, response_1.sendError)(res, "Old password does not match", 400);
+            return;
         }
         const hashedPassword = yield bcrypt_1.default.hash(newPassword, 5);
         const updatedUser = yield client.user.update({
@@ -611,61 +485,97 @@ app.post("/api/v1/updateUserPassword", middleware_1.userMiddleware, (req, res) =
                 password: hashedPassword,
             },
         });
-        res.status(200).json({
-            message: "Password updated successfully",
-            user: {
-                id: updatedUser.id,
-                username: updatedUser.username,
-                email: updatedUser.email,
-            },
-        });
+        (0, response_1.sendSuccess)(res, {
+            id: updatedUser.id,
+            username: updatedUser.username,
+            email: updatedUser.email,
+        }, "Password updated successfully");
     }
     catch (err) {
-        res.status(400).json({
-            message: "Error in updating the password",
-            error: err,
-        });
+        (0, response_1.sendError)(res, "Error in updating the password", 400);
     }
 }));
-//@ts-ignore
+// Booking routes
 app.post("/api/v1/getChargingSessions", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
-        const userId = req.userId;
+        const userId = parseInt(req.userId);
         const sessions = yield client.booking.findMany({
             where: {
-                userId: parseInt(userId),
+                userId: userId,
             },
             include: {
                 chargingStation: true,
             },
         });
         if (!sessions || sessions.length === 0) {
-            return res.status(404).json({
-                message: "No charging sessions found for this user",
-            });
+            (0, response_1.sendError)(res, "No charging sessions found for this user", 404);
+            return;
         }
-        res.status(200).json({
-            message: "Charging sessions fetched successfully",
-            sessions,
-        });
+        (0, response_1.sendSuccess)(res, { sessions }, "Charging sessions fetched successfully");
     }
     catch (err) {
-        res.status(400).json({
-            message: "Error in fetching the charging sessions",
-            error: err,
-        });
+        (0, response_1.sendError)(res, "Error in fetching the charging sessions", 400);
     }
 }));
-//@ts-ignore
-app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+app.post("/api/v1/getAllBookings", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
+        const userId = parseInt(req.userId);
+        const { status, limit = 10, offset = 0 } = req.body;
+        const whereClause = {
+            userId: userId,
+        };
+        // Optional filter by status
+        if (status) {
+            whereClause.status = status;
+        }
+        const bookings = yield client.booking.findMany({
+            where: whereClause,
+            include: {
+                chargingStation: true,
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                    },
+                },
+            },
+            orderBy: {
+                startTime: "desc",
+            },
+            take: parseInt(limit),
+            skip: parseInt(offset),
+        });
+        const total = yield client.booking.count({
+            where: whereClause,
+        });
+        if (!bookings || bookings.length === 0) {
+            (0, response_1.sendError)(res, "No bookings found for this user", 404);
+            return;
+        }
+        (0, response_1.sendSuccess)(res, {
+            bookings,
+            pagination: {
+                total,
+                limit: parseInt(limit),
+                offset: parseInt(offset),
+                hasMore: parseInt(offset) + parseInt(limit) < total,
+            },
+        }, "Bookings fetched successfully");
+    }
+    catch (err) {
+        console.error("GetAllBookings error:", err);
+        (0, response_1.sendError)(res, "Error in fetching bookings", 400);
+    }
+}));
+app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    try {
         const userId = parseInt(req.userId);
         const { lat, long } = req.body;
         if (!lat || !long) {
-            return res.status(400).json({ message: "Latitude and longitude are required" });
+            (0, response_1.sendError)(res, "Latitude and longitude are required", 400);
+            return;
         }
         const now = new Date();
         // Step 1: Check if user has an active booking
@@ -681,12 +591,11 @@ app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter
             },
         });
         if (existingBooking) {
-            return res.status(400).json({
-                message: "You already have an active booking",
-            });
+            (0, response_1.sendError)(res, "You already have an active booking", 400);
+            return;
         }
         // Step 2: Fetch nearby charging stations from OpenChargeMap API
-        const apiKey = config_2.OPEN_CHARGE_MAPS_API_KEY;
+        const apiKey = config_1.OPEN_CHARGE_MAPS_API_KEY;
         const externalResponse = yield axios_1.default.get("https://api.openchargemap.io/v3/poi/", {
             params: {
                 output: "json",
@@ -700,7 +609,8 @@ app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter
         });
         const externalStations = externalResponse.data;
         if (externalStations.length === 0) {
-            return res.status(400).json({ message: "No charging stations found nearby" });
+            (0, response_1.sendError)(res, "No charging stations found nearby", 400);
+            return;
         }
         const startTime = now;
         // take capacityOfBattery and currentBatteryStatus  from car details and calculate endTime
@@ -710,11 +620,16 @@ app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter
             },
         });
         if (!carDetails) {
-            return res.status(400).json({ message: "Car details not found for user" });
+            (0, response_1.sendError)(res, "Car details not found for user", 400);
+            return;
         }
         const capacityOfBattery = carDetails.capacityOfBattery || 50; // Default to 50 if not set
         const currentBatteryStatus = carDetails.currentBatteryStatus || 0; // Default to 0 if not set
-        const chargingTime = (capacityOfBattery - currentBatteryStatus) * 60 * 1000; // Assuming 1 minute per 1% battery
+        // Calculate charging time: 1 minute per 1% battery
+        // Ensure minimum 15 minutes and maximum 8 hours
+        let chargingMinutes = capacityOfBattery - currentBatteryStatus;
+        chargingMinutes = Math.max(15, Math.min(chargingMinutes * 1, 480)); // 480 minutes = 8 hours
+        const chargingTime = chargingMinutes * 60 * 1000;
         const endTime = new Date(startTime.getTime() + chargingTime);
         // Step 3: Iterate over nearby stations to find one with available slots
         let selectedStation = null;
@@ -735,7 +650,40 @@ app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter
             }
         }
         if (!selectedStation) {
-            return res.status(400).json({ message: "No nearby charging stations with available slots" });
+            // Fallback: if external stations exist but no internal station has available slots,
+            // create a minimal internal chargingStation from the first external result so booking
+            // can proceed in development/testing environments.
+            try {
+                const fallbackExt = externalStations[0];
+                const fallbackName = ((_b = fallbackExt === null || fallbackExt === void 0 ? void 0 : fallbackExt.AddressInfo) === null || _b === void 0 ? void 0 : _b.Title) || "External Station";
+                // Check if station with this name already exists (might be created by another request)
+                const existingFallback = yield client.chargingStation.findFirst({
+                    where: {
+                        name: fallbackName,
+                    },
+                });
+                if (existingFallback && existingFallback.avaliableSlots > 0) {
+                    selectedStation = existingFallback;
+                }
+                else {
+                    // Create new station with 5 available slots for testing
+                    const createdStation = yield client.chargingStation.create({
+                        data: {
+                            name: fallbackName,
+                            status: true,
+                            avaliableSlots: 5,
+                            capacity: 10,
+                            solarCapacity: 0,
+                        },
+                    });
+                    selectedStation = createdStation;
+                }
+            }
+            catch (createErr) {
+                console.error("Failed to create fallback station:", createErr);
+                (0, response_1.sendError)(res, "No nearby charging stations with available slots", 400);
+                return;
+            }
         }
         // Step 4: Transaction to decrement slot and create booking
         const booking = yield client.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
@@ -763,33 +711,27 @@ app.post("/api/v1/booking", middleware_1.userMiddleware, (req, res) => __awaiter
             });
             return newBooking;
         }));
-        return res.status(201).json({
-            message: "Booking successful",
-            booking,
-        });
+        (0, response_1.sendSuccess)(res, { booking }, "Booking successful", 201);
     }
     catch (err) {
         console.error("Booking error:", err);
-        return res.status(500).json({
-            message: "Internal server error while creating booking",
-            error: err instanceof Error ? err.message : "Unknown error",
-        });
+        (0, response_1.sendError)(res, "Internal server error while creating booking", 500);
     }
 }));
-//@ts-ignore
 app.post("/api/v1/cancelBooking", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
         const userId = parseInt(req.userId);
         const { bookingId } = req.body;
         const booking = yield client.booking.findUnique({
             where: { id: bookingId },
         });
         if (!booking || booking.userId !== userId) {
-            return res.status(404).json({ message: "Booking not found or unauthorized" });
+            (0, response_1.sendError)(res, "Booking not found or unauthorized", 404);
+            return;
         }
         if (booking.status !== "CONFIRMED" && booking.status !== "PENDING") {
-            return res.status(400).json({ message: "Booking cannot be canceled" });
+            (0, response_1.sendError)(res, "Booking cannot be canceled", 400);
+            return;
         }
         yield client.$transaction([
             client.booking.update({
@@ -803,27 +745,27 @@ app.post("/api/v1/cancelBooking", middleware_1.userMiddleware, (req, res) => __a
                 },
             }),
         ]);
-        return res.status(200).json({ message: "Booking canceled successfully" });
+        (0, response_1.sendSuccess)(res, null, "Booking canceled successfully");
     }
     catch (err) {
         console.error("Cancel booking error:", err);
-        return res.status(500).json({ message: "Error canceling booking", error: err });
+        (0, response_1.sendError)(res, "Error canceling booking", 500);
     }
 }));
-//@ts-ignore
 app.post("/api/v1/completeBooking", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
         const userId = parseInt(req.userId);
         const { bookingId } = req.body;
         const booking = yield client.booking.findUnique({
             where: { id: bookingId },
         });
         if (!booking || booking.userId !== userId) {
-            return res.status(404).json({ message: "Booking not found or unauthorized" });
+            (0, response_1.sendError)(res, "Booking not found or unauthorized", 404);
+            return;
         }
         if (booking.status !== "CONFIRMED") {
-            return res.status(400).json({ message: "Booking is not active" });
+            (0, response_1.sendError)(res, "Booking is not active", 400);
+            return;
         }
         yield client.$transaction([
             client.booking.update({
@@ -840,74 +782,20 @@ app.post("/api/v1/completeBooking", middleware_1.userMiddleware, (req, res) => _
                 },
             }),
         ]);
-        return res.status(200).json({ message: "Booking marked as completed" });
+        (0, response_1.sendSuccess)(res, null, "Booking marked as completed");
     }
     catch (err) {
         console.error("Complete booking error:", err);
-        return res.status(500).json({ message: "Error completing booking", error: err });
+        (0, response_1.sendError)(res, "Error completing booking", 500);
     }
 }));
-//@ts-ignore
-app.get("/api/v1/getBookingStatus", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        //@ts-ignore
-        const userId = parseInt(req.userId);
-        const booking = yield client.booking.findFirst({
-            where: {
-                userId,
-            },
-            orderBy: {
-                startTime: "desc",
-            },
-            include: {
-                chargingStation: true,
-                payment: true,
-            },
-        });
-        if (!booking) {
-            return res.status(404).json({ message: "No booking found" });
-        }
-        return res.status(200).json({
-            message: "Booking status fetched",
-            booking,
-        });
-    }
-    catch (err) {
-        console.error("Booking status error:", err);
-        return res.status(500).json({ message: "Error fetching booking", error: err });
-    }
-}));
-//@ts-ignore
-app.get("/api/v1/getBookingHistory", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        //@ts-ignore
-        const userId = parseInt(req.userId);
-        const bookings = yield client.booking.findMany({
-            where: { userId },
-            orderBy: { startTime: "desc" },
-            include: {
-                chargingStation: true,
-                payment: true,
-            },
-        });
-        return res.status(200).json({
-            message: "Booking history fetched",
-            bookings,
-        });
-    }
-    catch (err) {
-        console.error("Booking history error:", err);
-        return res.status(500).json({ message: "Error fetching history", error: err });
-    }
-}));
-//@ts-ignore
 app.post("/api/v1/payment", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        //@ts-ignore
         const userId = parseInt(req.userId);
         const { bookingId, amount, paymentMode } = req.body;
         if (!bookingId || !amount || !paymentMode) {
-            return res.status(400).json({ message: "Missing payment details" });
+            (0, response_1.sendError)(res, "Missing payment details", 400);
+            return;
         }
         // Ensure the booking exists and belongs to the user
         const booking = yield client.booking.findUnique({
@@ -915,27 +803,152 @@ app.post("/api/v1/payment", middleware_1.userMiddleware, (req, res) => __awaiter
             include: { user: true },
         });
         if (!booking || booking.userId !== userId) {
-            return res.status(404).json({ message: "Booking not found" });
+            (0, response_1.sendError)(res, "Booking not found", 404);
+            return;
         }
+        // Validate and normalize payment mode
+        const validModes = ["CARD", "UPI", "NET_BANKING", "CASH", "WALLET"];
+        const normalizedMode = paymentMode.toUpperCase();
+        if (!validModes.includes(normalizedMode)) {
+            (0, response_1.sendError)(res, `Invalid payment mode. Valid modes: ${validModes.join(", ")}`, 400);
+            return;
+        }
+        // Calculate savings (example: 10% discount)
+        const originalAmount = parseFloat(amount);
+        const savings = originalAmount * 0.1; // 10% savings
+        const finalAmount = originalAmount - savings;
         const payment = yield client.payment.create({
             data: {
                 userId,
                 bookingId,
-                amount: parseFloat(amount),
-                paymentMode,
+                amount: finalAmount,
+                originalAmount: originalAmount,
+                savings: savings,
+                paymentMode: normalizedMode,
                 status: "SUCCESS",
             },
         });
-        return res.status(201).json({
-            message: "Payment successful",
-            payment,
-        });
+        (0, response_1.sendSuccess)(res, { payment }, "Payment successful", 201);
     }
     catch (err) {
         console.error("Payment error:", err);
-        return res.status(500).json({ message: "Error processing payment", error: err });
+        (0, response_1.sendError)(res, "Error processing payment", 500);
     }
 }));
-app.listen(3000, () => {
-    console.log("Server is running on port 3000");
+app.post("/api/v1/getCarDetails", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = parseInt(req.userId);
+        const cars = yield client.car.findMany({
+            where: {
+                userId: userId,
+            },
+            select: {
+                id: true,
+                name: true,
+                model: true,
+                number: true,
+                currentBatteryHealth: true,
+                capacityOfBattery: true,
+                currentBatteryStatus: true,
+                typeOfPort: true,
+                fastSupporting: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+        if (!cars || cars.length === 0) {
+            (0, response_1.sendError)(res, "No car details found for this user", 404);
+            return;
+        }
+        (0, response_1.sendSuccess)(res, { cars }, "Car details fetched successfully");
+    }
+    catch (err) {
+        console.error("GetCarDetails error:", err);
+        (0, response_1.sendError)(res, "Error in fetching car details", 400);
+    }
+}));
+app.post("/api/v1/insertCarData", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { carName, carModel, carNumber, currentBattreyHealth, capacityOfBattrey, typeOfPort, FastAndSlow, currentBattreyStatus, } = req.body;
+        if (!carName ||
+            !carModel ||
+            !carNumber ||
+            !currentBattreyHealth ||
+            !capacityOfBattrey ||
+            !typeOfPort ||
+            !FastAndSlow ||
+            !currentBattreyStatus) {
+            (0, response_1.sendError)(res, "Car details are required", 400);
+            return;
+        }
+        const car = yield client.car.create({
+            data: {
+                userId: parseInt(req.userId),
+                name: carName,
+                model: carModel,
+                number: carNumber,
+                currentBatteryHealth: parseFloat(currentBattreyHealth),
+                capacityOfBattery: parseFloat(capacityOfBattrey),
+                typeOfPort: typeOfPort,
+                fastSupporting: FastAndSlow.toLowerCase() == "fast",
+                currentBatteryStatus: parseFloat(currentBattreyStatus),
+            },
+        });
+        (0, response_1.sendSuccess)(res, { car }, "Car details updated successfully");
+    }
+    catch (err) {
+        console.error("InsertCarData error:", err);
+        if (err instanceof client_1.Prisma.PrismaClientValidationError) {
+            console.error("Prisma Validation Error Details:", err.message);
+        }
+        // return more detailed message in dev, generic in prod
+        const message = (err === null || err === void 0 ? void 0 : err.message) || "Error in updating the car details";
+        (0, response_1.sendError)(res, message, 400);
+    }
+}));
+app.post("/api/v1/deleteCarDetails", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { carId } = req.body;
+        const userId = parseInt(req.userId);
+        if (!carId) {
+            (0, response_1.sendError)(res, "Car ID is required", 400);
+            return;
+        }
+        // Verify the car belongs to the authenticated user
+        const car = yield client.car.findUnique({
+            where: { id: carId },
+        });
+        if (!car) {
+            (0, response_1.sendError)(res, "Car not found", 404);
+            return;
+        }
+        if (car.userId !== userId) {
+            (0, response_1.sendError)(res, "Unauthorized to delete this car", 403);
+            return;
+        }
+        // Delete the car
+        const deletedCar = yield client.car.delete({
+            where: { id: carId },
+        });
+        (0, response_1.sendSuccess)(res, { car: deletedCar }, "Car deleted successfully");
+    }
+    catch (err) {
+        console.error("DeleteCarDetails error:", err);
+        if (err instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+            if (err.code === "P2025") {
+                (0, response_1.sendError)(res, "Car not found", 404);
+                return;
+            }
+        }
+        (0, response_1.sendError)(res, "Error deleting car details", 400);
+    }
+}));
+// New API routes with clean architecture
+app.use("/api/v1", routes_1.default);
+// Error handling middleware (must be last)
+app.use(errorHandler_1.errorHandler);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });

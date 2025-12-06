@@ -1,0 +1,20 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const battery_routes_1 = __importDefault(require("./battery.routes"));
+const payment_routes_1 = __importDefault(require("./payment.routes"));
+const statistics_routes_1 = __importDefault(require("./statistics.routes"));
+const stats_routes_1 = __importDefault(require("./stats.routes"));
+const car_routes_1 = __importDefault(require("./car.routes"));
+const chargingSchedule_routes_1 = __importDefault(require("./chargingSchedule.routes"));
+const router = (0, express_1.Router)();
+router.use("/battery", battery_routes_1.default);
+router.use("/payment", payment_routes_1.default);
+router.use("/statistics", statistics_routes_1.default);
+router.use("/stats", stats_routes_1.default);
+router.use("/cars", car_routes_1.default);
+router.use("/charging-schedule", chargingSchedule_routes_1.default);
+exports.default = router;

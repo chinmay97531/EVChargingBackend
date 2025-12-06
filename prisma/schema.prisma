@@ -46,6 +46,9 @@ model Car {
   fastSupporting        Boolean
   status          Boolean      @default(true)
   remarks         String?
+  batteryHistory  BatteryHistory[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model ChargingStation {
@@ -98,6 +101,8 @@ model Payment {
   user      User    @relation(fields: [userId], references: [id])
   booking   Booking @relation(fields: [bookingId], references: [id])
   amount    Float
+  originalAmount Float
+  savings   Float   @default(0)
   paymentMode PaymnetType @default(CASH)
   status    PaymentStatus @default(PENDING)
   remarks   String?
@@ -142,4 +147,14 @@ model SolarUsage {
   solarChargingPrice Float
   status              Boolean @default(true)
   remarks             String?
+}
+
+model BatteryHistory {
+  id          Int      @id @default(autoincrement())
+  carId       Int
+  car         Car      @relation(fields: [carId], references: [id])
+  soc         Float
+  soh         Float
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
 }

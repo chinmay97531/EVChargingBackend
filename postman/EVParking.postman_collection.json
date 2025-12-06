@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "EVParking Backend",
+    "_postman_id": "evparking-backend-collection",
+    "description": "Postman collection for EVParking Backend APIs (import into Postman). Update collection variable `token` after signin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth - Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/signup", "host": ["{{baseUrl}}"], "path": ["api","v1","signup"] }
+      }
+    },
+    {
+      "name": "Auth - Signin",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/signin", "host": ["{{baseUrl}}"], "path": ["api","v1","signin"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Save token from response to collection variable 'token'",
+              "var json = pm.response.json();",
+              "if (json && json.data && json.data.token) pm.collectionVariables.set('token', json.data.token);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cars - Insert Car",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "token", "value": "{{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": 1,\n  \"make\": \"Tesla\",\n  \"model\": \"Model 3\",\n  \"batteryCapacity\": 75,\n  \"currentSoC\": 50\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/insertCarData", "host": ["{{baseUrl}}"], "path": ["api","v1","insertCarData"] }
+      }
+    },
+    {
+      "name": "Cars - Get Car Details",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "token", "value": "{{token}}" } ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/getCarDetails", "host": ["{{baseUrl}}"], "path": ["api","v1","getCarDetails"] }
+      }
+    },
+    {
+      "name": "Cars - Delete Car",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "token", "value": "{{token}}" } ],
+        "body": { "mode": "raw", "raw": "{ \"carId\": 1 }" },
+        "url": { "raw": "{{baseUrl}}/api/v1/deleteCarDetails", "host": ["{{baseUrl}}"], "path": ["api","v1","deleteCarDetails"] }
+      }
+    },
+    {
+      "name": "Booking - Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "token", "value": "{{token}}" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"lat\": 30.3564,\n  \"long\": 76.3647\n}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/booking", "host": ["{{baseUrl}}"], "path": ["api","v1","booking"] }
+      }
+    },
+    {
+      "name": "Charging Sessions - Get",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "token", "value": "{{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/getChargingSessions", "host": ["{{baseUrl}}"], "path": ["api","v1","getChargingSessions"] }
+      }
+    },
+    {
+      "name": "Payment - Create Payment",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "token", "value": "{{token}}" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": 1,\n  \"amount\": 100,\n  \"paymentMode\": \"CARD\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/payment", "host": ["{{baseUrl}}"], "path": ["api","v1","payment"] }
+      }
+    },
+    {
+      "name": "Booking - Complete Booking",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "token", "value": "{{token}}" } ],
+        "body": { "mode": "raw", "raw": "{ \"bookingId\": 1 }" },
+        "url": { "raw": "{{baseUrl}}/api/v1/completeBooking", "host": ["{{baseUrl}}"], "path": ["api","v1","completeBooking"] }
+      }
+    },
+    {
+      "name": "Stats - Sessions Over Time",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "token", "value": "{{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/stats/sessions-over-time?granularity=daily", "host": ["{{baseUrl}}"], "path": ["api","v1","stats","sessions-over-time"], "query": [ { "key": "granularity", "value": "daily" } ] }
+      }
+    },
+    {
+      "name": "Stats - Revenue Over Time",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "token", "value": "{{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/stats/revenue-over-time?granularity=daily", "host": ["{{baseUrl}}"], "path": ["api","v1","stats","revenue-over-time"], "query": [ { "key": "granularity", "value": "daily" } ] }
+      }
+    },
+    {
+      "name": "Stats - Energy Consumption",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "token", "value": "{{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/stats/energy-consumption?granularity=daily", "host": ["{{baseUrl}}"], "path": ["api","v1","stats","energy-consumption"], "query": [ { "key": "granularity", "value": "daily" } ] }
+      }
+    },
+    {
+      "name": "Stats - SoC Trends",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "token", "value": "{{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/stats/soc-trends?granularity=daily", "host": ["{{baseUrl}}"], "path": ["api","v1","stats","soc-trends"], "query": [ { "key": "granularity", "value": "daily" } ] }
+      }
+    },
+    {
+      "name": "Stats - Payments By Mode",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "token", "value": "{{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/stats/payments-by-mode", "host": ["{{baseUrl}}"], "path": ["api","v1","stats","payments-by-mode"] }
+      }
+    }
+  ]
+}
