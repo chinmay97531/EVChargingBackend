@@ -128,8 +128,10 @@ app.post("/api/v1/nearestEVStation", userMiddleware, async (req, res) => {
       sendError(res, "No charging stations found nearby", 400);
     }
 
-    const stations = data.map(
-      (station: { AddressInfo?: any; Connections?: any[] }) => {
+    const stations = data
+      .filter((station: any) => station.StatusType?.IsOperational === true) // Only operational stations
+      .map(
+      (station: { AddressInfo?: any; Connections?: any[]; StatusType?: any }) => {
         const connections = station.Connections || [];
 
         const chargerTypeMap: Record<string, number> = {};
@@ -175,6 +177,8 @@ app.post("/api/v1/nearestEVStation", userMiddleware, async (req, res) => {
           ),
           FastChargers: fastCharger,
           SlowChargers: slowCharger,
+          status: station.StatusType?.Title || "Unknown",
+          isOperational: station.StatusType?.IsOperational || false,
         };
       }
     );
@@ -215,7 +219,7 @@ app.post("/api/v1/getStationDetails", userMiddleware, async (req, res) => {
       .filter((station: any) =>
         station.AddressInfo?.Title?.toLowerCase().includes(
           stationName.toLowerCase()
-        )
+        ) && station.StatusType?.IsOperational === true
       )
       .slice(0, 100);
 
@@ -225,7 +229,7 @@ app.post("/api/v1/getStationDetails", userMiddleware, async (req, res) => {
     }
 
     const stations = matches.map(
-      (station: { AddressInfo?: any; Connections?: any[] }) => {
+      (station: { AddressInfo?: any; Connections?: any[]; StatusType?: any }) => {
         const connections = station.Connections || [];
 
         const chargerTypeMap: Record<string, number> = {};
@@ -271,6 +275,8 @@ app.post("/api/v1/getStationDetails", userMiddleware, async (req, res) => {
           ),
           FastChargers: fastCharger,
           SlowChargers: slowCharger,
+          status: station.StatusType?.Title || "Unknown",
+          isOperational: station.StatusType?.IsOperational || false,
         };
       }
     );
@@ -333,8 +339,10 @@ app.post("/api/v1/getStationDetailsByPostCode", userMiddleware, async (req, res)
       return;
     }
 
-    const stations = data.map(
-      (station: { AddressInfo?: any; Connections?: any[] }) => {
+    const stations = data
+      .filter((station: any) => station.StatusType?.IsOperational === true) // Only operational stations
+      .map(
+      (station: { AddressInfo?: any; Connections?: any[]; StatusType?: any }) => {
         const connections = station.Connections || [];
 
         const chargerTypeMap: Record<string, number> = {};
@@ -380,6 +388,8 @@ app.post("/api/v1/getStationDetailsByPostCode", userMiddleware, async (req, res)
           ),
           FastChargers: fastCharger,
           SlowChargers: slowCharger,
+          status: station.StatusType?.Title || "Unknown",
+          isOperational: station.StatusType?.IsOperational || false,
         };
       }
     );
@@ -429,8 +439,10 @@ app.post("/api/v1/getStationDetailsByCity", userMiddleware, async (req, res) => 
       return;
     }
 
-    const stations = matches.map(
-      (station: { AddressInfo?: any; Connections?: any[] }) => {
+    const stations = matches
+      .filter((station: any) => station.StatusType?.IsOperational === true) // Only operational stations
+      .map(
+      (station: { AddressInfo?: any; Connections?: any[]; StatusType?: any }) => {
         const connections = station.Connections || [];
 
         const chargerTypeMap: Record<string, number> = {};
@@ -476,6 +488,8 @@ app.post("/api/v1/getStationDetailsByCity", userMiddleware, async (req, res) => 
           ),
           FastChargers: fastCharger,
           SlowChargers: slowCharger,
+          status: station.StatusType?.Title || "Unknown",
+          isOperational: station.StatusType?.IsOperational || false,
         };
       }
     );
@@ -505,6 +519,8 @@ app.post("/api/v1/getUserDetails", userMiddleware, async (req: AuthenticatedRequ
         id: true,
         username: true,
         email: true,
+        status: true,
+        role: true,
       },
     });
 

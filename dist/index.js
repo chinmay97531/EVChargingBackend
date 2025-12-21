@@ -113,8 +113,10 @@ app.post("/api/v1/nearestEVStation", middleware_1.userMiddleware, (req, res) => 
         if (data.length === 0) {
             (0, response_1.sendError)(res, "No charging stations found nearby", 400);
         }
-        const stations = data.map((station) => {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        const stations = data
+            .filter((station) => { var _a; return ((_a = station.StatusType) === null || _a === void 0 ? void 0 : _a.IsOperational) === true; }) // Only operational stations
+            .map((station) => {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
             const connections = station.Connections || [];
             const chargerTypeMap = {};
             var fastCharger = 0;
@@ -152,6 +154,8 @@ app.post("/api/v1/nearestEVStation", middleware_1.userMiddleware, (req, res) => 
                 })),
                 FastChargers: fastCharger,
                 SlowChargers: slowCharger,
+                status: ((_m = station.StatusType) === null || _m === void 0 ? void 0 : _m.Title) || "Unknown",
+                isOperational: ((_o = station.StatusType) === null || _o === void 0 ? void 0 : _o.IsOperational) || false,
             };
         });
         (0, response_1.sendSuccess)(res, { stations }, "Charging stations fetched successfully");
@@ -184,8 +188,8 @@ app.post("/api/v1/getStationDetails", middleware_1.userMiddleware, (req, res) =>
         const data = response.data;
         const matches = data
             .filter((station) => {
-            var _a, _b;
-            return (_b = (_a = station.AddressInfo) === null || _a === void 0 ? void 0 : _a.Title) === null || _b === void 0 ? void 0 : _b.toLowerCase().includes(stationName.toLowerCase());
+            var _a, _b, _c;
+            return ((_b = (_a = station.AddressInfo) === null || _a === void 0 ? void 0 : _a.Title) === null || _b === void 0 ? void 0 : _b.toLowerCase().includes(stationName.toLowerCase())) && ((_c = station.StatusType) === null || _c === void 0 ? void 0 : _c.IsOperational) === true;
         })
             .slice(0, 100);
         if (matches.length === 0) {
@@ -193,7 +197,7 @@ app.post("/api/v1/getStationDetails", middleware_1.userMiddleware, (req, res) =>
             return;
         }
         const stations = matches.map((station) => {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
             const connections = station.Connections || [];
             const chargerTypeMap = {};
             var fastCharger = 0;
@@ -231,6 +235,8 @@ app.post("/api/v1/getStationDetails", middleware_1.userMiddleware, (req, res) =>
                 })),
                 FastChargers: fastCharger,
                 SlowChargers: slowCharger,
+                status: ((_m = station.StatusType) === null || _m === void 0 ? void 0 : _m.Title) || "Unknown",
+                isOperational: ((_o = station.StatusType) === null || _o === void 0 ? void 0 : _o.IsOperational) || false,
             };
         });
         (0, response_1.sendSuccess)(res, { stations }, "Charging stations fetched successfully");
@@ -279,8 +285,10 @@ app.post("/api/v1/getStationDetailsByPostCode", middleware_1.userMiddleware, (re
             (0, response_1.sendError)(res, "No charging stations found nearby", 400);
             return;
         }
-        const stations = data.map((station) => {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        const stations = data
+            .filter((station) => { var _a; return ((_a = station.StatusType) === null || _a === void 0 ? void 0 : _a.IsOperational) === true; }) // Only operational stations
+            .map((station) => {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
             const connections = station.Connections || [];
             const chargerTypeMap = {};
             var fastCharger = 0;
@@ -318,6 +326,8 @@ app.post("/api/v1/getStationDetailsByPostCode", middleware_1.userMiddleware, (re
                 })),
                 FastChargers: fastCharger,
                 SlowChargers: slowCharger,
+                status: ((_m = station.StatusType) === null || _m === void 0 ? void 0 : _m.Title) || "Unknown",
+                isOperational: ((_o = station.StatusType) === null || _o === void 0 ? void 0 : _o.IsOperational) || false,
             };
         });
         (0, response_1.sendSuccess)(res, { stations }, "Charging stations fetched successfully");
@@ -358,8 +368,10 @@ app.post("/api/v1/getStationDetailsByCity", middleware_1.userMiddleware, (req, r
             (0, response_1.sendError)(res, "No stations found in the given City", 404);
             return;
         }
-        const stations = matches.map((station) => {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        const stations = matches
+            .filter((station) => { var _a; return ((_a = station.StatusType) === null || _a === void 0 ? void 0 : _a.IsOperational) === true; }) // Only operational stations
+            .map((station) => {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
             const connections = station.Connections || [];
             const chargerTypeMap = {};
             var fastCharger = 0;
@@ -397,6 +409,8 @@ app.post("/api/v1/getStationDetailsByCity", middleware_1.userMiddleware, (req, r
                 })),
                 FastChargers: fastCharger,
                 SlowChargers: slowCharger,
+                status: ((_m = station.StatusType) === null || _m === void 0 ? void 0 : _m.Title) || "Unknown",
+                isOperational: ((_o = station.StatusType) === null || _o === void 0 ? void 0 : _o.IsOperational) || false,
             };
         });
         (0, response_1.sendSuccess)(res, { stations }, `Charging stations fetched successfully and number of Stations found are: ${matches.length}`);
@@ -420,6 +434,8 @@ app.post("/api/v1/getUserDetails", middleware_1.userMiddleware, (req, res) => __
                 id: true,
                 username: true,
                 email: true,
+                status: true,
+                role: true,
             },
         });
         if (!user) {

@@ -21,7 +21,9 @@ class StatsController {
                 const endDate = req.query.endDate ? new Date(req.query.endDate) : undefined;
                 const data = yield this.statisticsService.getSessionsOverTime(userId, startDate, endDate);
                 // map to { label, value }
-                const result = data.map((d) => ({ label: d.date, value: d.count }));
+                const granularity = req.query.granularity || "daily";
+                const mapped = data.map((d) => ({ label: d.date, value: d.count }));
+                const result = this.groupByGranularity(mapped, granularity);
                 (0, response_1.sendSuccess)(res, result, "Sessions over time");
             }
             catch (err) {
@@ -34,7 +36,9 @@ class StatsController {
                 const startDate = req.query.startDate ? new Date(req.query.startDate) : undefined;
                 const endDate = req.query.endDate ? new Date(req.query.endDate) : undefined;
                 const data = yield this.statisticsService.getRevenueTrends(userId, startDate, endDate);
-                const result = data.map((d) => ({ label: d.date, value: d.amount }));
+                const granularity = req.query.granularity || "daily";
+                const mapped = data.map((d) => ({ label: d.date, value: d.amount }));
+                const result = this.groupByGranularity(mapped, granularity);
                 (0, response_1.sendSuccess)(res, result, "Revenue over time");
             }
             catch (err) {
@@ -47,7 +51,9 @@ class StatsController {
                 const startDate = req.query.startDate ? new Date(req.query.startDate) : undefined;
                 const endDate = req.query.endDate ? new Date(req.query.endDate) : undefined;
                 const data = yield this.statisticsService.getEnergyConsumption(userId, startDate, endDate);
-                const result = data.map((d) => ({ label: d.date, value: d.total }));
+                const granularity = req.query.granularity || "daily";
+                const mapped = data.map((d) => ({ label: d.date, value: d.total }));
+                const result = this.groupByGranularity(mapped, granularity);
                 (0, response_1.sendSuccess)(res, result, "Energy consumption over time");
             }
             catch (err) {
@@ -87,6 +93,29 @@ class StatsController {
             }
         });
         this.statisticsService = new statistics_service_1.StatisticsService();
+    }
+    // helper to group daily data into weekly/monthly buckets
+    groupByGranularity(items, granularity) {
+        if (!items || items.length === 0)
+            return [];
+        if (granularity === "daily")
+            return items;
+        const grouped = {};
+        items.forEach((it) => {
+            const d = new Date(it.label);
+            let key = it.label;
+            if (granularity === "weekly") {
+                // ISO week key: YYYY-WW
+                const onejan = new Date(d.getFullYear(), 0, 1);
+                const week = Math.ceil((((d.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
+                key = `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
+            }
+            else if (granularity === "monthly") {
+                key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            }
+            grouped[key] = (grouped[key] || 0) + it.value;
+        });
+        return Object.entries(grouped).map(([label, value]) => ({ label, value }));
     }
 }
 exports.StatsController = StatsController;
