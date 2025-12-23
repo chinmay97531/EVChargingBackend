@@ -16,17 +16,23 @@ class ChargingScheduleController {
     constructor() {
         this.predict = (req, res) => __awaiter(this, void 0, void 0, function* () {
             try {
-                const { hour, demand, solar } = req.body;
-                if (hour === undefined || demand === undefined || solar === undefined) {
-                    (0, response_1.sendError)(res, "hour, demand, and solar are required", 400);
+                const { current_soc, required_soc, hours_remaining, plug_out_time, preference, solar_kw, price, station_battery_kwh, time_slot, } = req.body;
+                if (current_soc === undefined || required_soc === undefined) {
+                    (0, response_1.sendError)(res, "current_soc and required_soc are required", 400);
                     return;
                 }
                 const result = yield this.chargingScheduleService.predict({
-                    hour: parseInt(hour),
-                    demand: parseInt(demand),
-                    solar: parseInt(solar),
+                    current_soc: parseFloat(current_soc),
+                    required_soc: parseFloat(required_soc),
+                    hours_remaining: hours_remaining !== undefined ? parseFloat(hours_remaining) : undefined,
+                    plug_out_time,
+                    preference,
+                    solar_kw: solar_kw !== undefined ? parseFloat(solar_kw) : undefined,
+                    price: price !== undefined ? parseFloat(price) : undefined,
+                    station_battery_kwh: station_battery_kwh !== undefined ? parseFloat(station_battery_kwh) : undefined,
+                    time_slot: time_slot !== undefined ? parseInt(time_slot) : undefined,
                 });
-                (0, response_1.sendSuccess)(res, result, "Charging schedule prediction retrieved successfully");
+                (0, response_1.sendSuccess)(res, result, "Charging schedule inference retrieved successfully");
             }
             catch (error) {
                 (0, response_1.sendError)(res, error.message || "Failed to get prediction", 500, error);

@@ -18,17 +18,15 @@ const config_1 = require("../config");
 class ChargingScheduleService {
     predict(request) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b;
+            var _a, _b, _c, _d;
             try {
-                const response = yield axios_1.default.post(`${config_1.PYTHON_SERVICE_URL}/predict`, {
-                    hour: request.hour,
-                    demand: request.demand,
-                    solar: request.solar,
-                });
+                const response = yield axios_1.default.post(`${config_1.PYTHON_SERVICE_URL}/infer`, request);
                 return response.data;
             }
             catch (error) {
-                throw new Error(((_b = (_a = error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.error) || "Failed to get charging schedule prediction");
+                throw new Error(((_b = (_a = error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.message) ||
+                    ((_d = (_c = error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.error) ||
+                    "Failed to get charging schedule prediction");
             }
         });
     }

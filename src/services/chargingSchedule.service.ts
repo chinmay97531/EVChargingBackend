@@ -2,30 +2,34 @@ import axios from "axios";
 import { PYTHON_SERVICE_URL } from "../config";
 
 export interface ChargingScheduleRequest {
-  hour: number;
-  demand: number;
-  solar: number;
+  current_soc: number;
+  required_soc: number;
+  hours_remaining?: number;
+  plug_out_time?: string;
+  preference?: string;
+  solar_kw?: number;
+  price?: number;
+  station_battery_kwh?: number;
+  time_slot?: number;
 }
 
 export interface ChargingScheduleResponse {
-  action: number;
   status: string;
+  result?: any;
   error?: string;
+  message?: string;
 }
 
 export class ChargingScheduleService {
   async predict(request: ChargingScheduleRequest): Promise<ChargingScheduleResponse> {
     try {
-      const response = await axios.post(`${PYTHON_SERVICE_URL}/predict`, {
-        hour: request.hour,
-        demand: request.demand,
-        solar: request.solar,
-      });
-
+      const response = await axios.post(`${PYTHON_SERVICE_URL}/infer`, request);
       return response.data;
     } catch (error: any) {
       throw new Error(
-        error.response?.data?.error || "Failed to get charging schedule prediction"
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Failed to get charging schedule prediction"
       );
     }
   }
